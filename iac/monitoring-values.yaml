@@ -1,0 +1,20 @@
+prometheus:
+  nodeSelector:
+    doks.digitalocean.com/node-pool: monitoring-pool
+
+grafana:
+  nodeSelector:
+    doks.digitalocean.com/node-pool: monitoring-pool
+
+alertmanager:
+  nodeSelector:
+    doks.digitalocean.com/node-pool: monitoring-pool
+
+kube-state-metrics:
+  nodeSelector:
+    doks.digitalocean.com/node-pool: monitoring-pool
+
+prometheusOperator:
+  nodeSelector:
+    doks.digitalocean.com/node-pool: monitoring-pool
+

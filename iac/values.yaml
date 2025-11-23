@@ -1,0 +1,11 @@
+watchNamespaces:
+- kafka
+affinity:
+  nodeAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: doks.digitalocean.com/node-pool
+              operator: In
+              values:
+                - monitoring-pool

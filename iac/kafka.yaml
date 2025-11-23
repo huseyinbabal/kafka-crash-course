@@ -1,0 +1,171 @@
+apiVersion: kafka.strimzi.io/v1
+kind: Kafka
+metadata:
+  name: high-throughput-kafka
+  namespace: kafka
+spec:
+  kafkaExporter:
+    topicRegex: ".*"
+    groupRegex: ".*"
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 200m
+        memory: 256Mi 
+  kafka:
+    version: 4.1.0
+    # No 'replicas' or 'zookeeper' here — KRaft mode handles that via KafkaNodePools
+
+    listeners:
+      # Internal communication inside the cluster
+      - name: plain
+        port: 9092
+        type: internal
+        tls: false
+        configuration:
+          brokers:
+            - broker: 0
+              advertisedPort: 9092
+            - broker: 1
+              advertisedPort: 9092
+            - broker: 2
+              advertisedPort: 9092
+            - broker: 3
+              advertisedPort: 9092
+            - broker: 4
+              advertisedPort: 9092
+
+    config:
+      # --- Core threading and I/O tuning ---
+      num.network.threads: 16
+      num.io.threads: 32
+      num.replica.fetchers: 8
+
+      # --- Socket and request tuning ---
+      socket.send.buffer.bytes: 1048576
+      socket.receive.buffer.bytes: 1048576
+      socket.request.max.bytes: 104857600
+
+      # --- Log and retention tuning ---
+      log.segment.bytes: 1073741824
+      log.retention.hours: 24
+      log.cleaner.enable: false
+      compression.type: lz4
+
+      # --- Replication / ISR config ---
+      offsets.topic.replication.factor: 3
+      transaction.state.log.replication.factor: 3
+      transaction.state.log.min.isr: 2
+      default.replication.factor: 3
+      num.partitions: 12
+      auto.create.topics.enable: true
+      enable.auto.commit: true
+      auto.commit.interval.ms: 1000
+
+  entityOperator:
+    topicOperator: {}
+    userOperator: {}
+---
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaNodePool
+metadata:
+  name: controller-pool
+  namespace: kafka
+  labels:
+    strimzi.io/cluster: high-throughput-kafka
+spec:
+  replicas: 3
+  roles:
+    - controller
+  resources:
+    requests:
+      cpu: 1
+      memory: 2Gi
+    limits:
+      cpu: 2
+      memory: 4Gi
+  storage:
+    type: persistent-claim
+    size: 50Gi
+    class: do-block-storage
+    deleteClaim: false
+  template:
+    pod:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: doks.digitalocean.com/node-pool
+                    operator: In
+                    values:
+                      - controller-pool
+---
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaNodePool
+metadata:
+  name: broker-pool
+  namespace: kafka
+  labels:
+    strimzi.io/cluster: high-throughput-kafka
+spec:
+  replicas: 5
+  roles:
+    - broker
+  resources:
+    requests:
+      cpu: 6
+      memory: 12Gi
+    limits:
+      cpu: 8
+      memory: 16Gi
+  storage:
+    type: persistent-claim
+    size: 500Gi
+    class: do-block-storage
+    deleteClaim: false
+  template:
+    pod:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: doks.digitalocean.com/node-pool
+                    operator: In
+                    values:
+                      - kafka-broker-pool
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: kafka-exporter-pods
+  namespace: monitoring
+  labels:
+    release: monitoring
+spec:
+  namespaceSelector:
+    matchNames:
+      - kafka
+  selector:
+    matchLabels:
+      strimzi.io/name: high-throughput-kafka-kafka-exporter
+  podMetricsEndpoints:
+    - port: tcp-prometheus
+      path: /metrics
+      interval: 10s
+---
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaTopic
+metadata:
+  name: perf-test
+  namespace: kafka
+  labels:
+    strimzi.io/cluster: high-throughput-kafka
+spec:
+  partitions: 96
+  replicas: 3
+  config:
+    min.insync.replicas: 2

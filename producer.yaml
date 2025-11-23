@@ -1,0 +1,52 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kafka-producer-loop
+  namespace: kafka
+spec:
+  replicas: 4
+  selector:
+    matchLabels:
+      app: kafka-producer-loop
+  template:
+    metadata:
+      labels:
+        app: kafka-producer-loop
+    spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: doks.digitalocean.com/node-pool
+                    operator: In
+                    values:
+                      - client-pool
+      containers:
+        - name: perf-producer
+          image: quay.io/strimzi/kafka:latest-kafka-4.1.0
+          command:
+            - /bin/bash
+            - -c
+            - |
+              echo "🔥 Starting continuous Kafka producer load test..."
+              while true; do
+                echo "💥 Sending messages..."
+                /opt/kafka/bin/kafka-producer-perf-test.sh \
+                  --topic perf-test \
+                  --num-records 10000000 \
+                  --record-size 10 \
+                  --throughput -1 \
+                  --producer-props \
+                    bootstrap.servers=high-throughput-kafka-kafka-bootstrap.kafka.svc:9092 \
+                    acks=1 \
+                    linger.ms=100 \
+                    batch.size=131072 \
+                    buffer.memory=134217728 \
+                    compression.type=lz4 \
+                    enable.idempotence=false \
+                    max.in.flight.requests.per.connection=10
+                echo "✅ Batch complete — sleeping 2s..."
+                sleep 2
+              done
+

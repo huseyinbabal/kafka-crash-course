@@ -1,0 +1,58 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kafka-perf-consumer-loop
+  namespace: kafka
+spec:
+  replicas: 96
+  selector:
+    matchLabels:
+      app: kafka-perf-consumer-loop
+  template:
+    metadata:
+      labels:
+        app: kafka-perf-consumer-loop
+    spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: doks.digitalocean.com/node-pool
+                    operator: In
+                    values:
+                      - client-pool
+      containers:
+        - name: perf-consumer
+          image: quay.io/strimzi/kafka:latest-kafka-4.1.0
+          command:
+            - /bin/bash
+            - -c
+            - |
+              echo "Starting continuous consumer on client-pool..."
+              while true; do
+                echo "Consuming messages..."
+                /opt/kafka/bin/kafka-consumer-perf-test.sh \
+                  --bootstrap-server high-throughput-kafka-kafka-bootstrap.kafka.svc:9092 \
+                  --topic perf-test \
+                  --group perf-consumer-group \
+                  --messages 10000000 \
+                  --timeout 50000 \
+                  --reporting-interval 1000 \
+                  --fetch-size 10485760 \
+                  --socket-buffer-size 2097152 \
+                  --print-metrics
+                sleep 2
+              done
+          env:
+          - name: KAFKA_HEAP_OPTS
+            value: "-Xms1g -Xmx1g"
+          - name: KAFKA_OPTS
+            value: "-XX:+UseG1GC -XX:MaxGCPauseMillis=200"
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "1Gi"
+            limits:
+              cpu: "1"
+              memory: "1536Mi"
