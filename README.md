@@ -5,7 +5,7 @@
 First, export your DigitalOcean API key and provision the infrastructure.
 
 ```bash
-export DIGITALOCEAN_API_KEY=your_api_key_here
+export DIGITALOCEAN_TOKEN=your_api_key_here
 
 cd iac/
 terraform init
